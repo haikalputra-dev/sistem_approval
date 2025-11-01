@@ -17,14 +17,14 @@
                     <input type="text" class="form-control" placeholder="Type here...">
                 </div>
             </div>
-            <ul class="navbar-nav  justify-content-end">
+            <ul class="navbar-nav justify-content-end">
                 <li class="nav-item d-flex align-items-center">
                     <form role="form" method="post" action="{{ route('logout') }}" id="logout-form">
                         @csrf
                         <a href="{{ route('logout') }}"
                             onclick="event.preventDefault(); document.getElementById('logout-form').submit();"
                             class="nav-link text-white font-weight-bold px-0">
-                            <i class="fa fa-user me-sm-1"></i>
+
                             <span class="d-sm-inline d-none">Log out</span>
                         </a>
                     </form>
@@ -125,6 +125,11 @@
                             </a>
                         </li>
                     </ul>
+                </li>
+                <li class="nav-item px-2 d-flex align-items-center">
+                    <a href="{{ route('profile') }}" class="nav-link text-white p-0">
+                        <i class="fa fa-user me-sm-1"></i>
+                    </a>
                 </li>
             </ul>
         </div>

@@ -26,6 +26,11 @@ class PageController extends Controller
         return view("pages.virtual-reality");
     }
 
+    public function permohonan()
+    {
+        return view("pages.form-permohonan");
+    }
+
     public function rtl()
     {
         return view("pages.rtl");

@@ -7,7 +7,12 @@
             <div class="col-12">
                 <div class="card mb-4">
                     <div class="card-header pb-0">
-                        <h6>Authors table</h6>
+                        <div class="d-flex align-items-center">
+                            <h6>Approval</h6>
+                            {{-- <p class="mb-0">Edit Profile</p> --}}
+                            {{-- <button >Buat Permohonan</button> --}}
+                            <a class="btn btn-primary btn-sm ms-auto" href="{{ route('form-permohonan') }}">Buat Permohonan</a>
+                        </div>
                     </div>
                     <div class="card-body px-0 pt-0 pb-2">
                         <div class="table-responsive p-0">

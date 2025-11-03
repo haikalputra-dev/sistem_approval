@@ -2,11 +2,11 @@
 
 namespace App\Models;
 
-use Illuminate\Contracts\Auth\MustVerifyEmail;
+// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Laravel\Sanctum\HasApiTokens;
+use Laravel\Sanctum\HasApiTokens; // Pastikan ini ada
 
 class User extends Authenticatable
 {
@@ -18,16 +18,11 @@ class User extends Authenticatable
      * @var array<int, string>
      */
     protected $fillable = [
-        'username',
-        'firstname',
-        'lastname',
+        'name',
         'email',
         'password',
-        'address',
-        'city',
-        'country',
-        'postal',
-        'about'
+        'role_id',
+        'perusahaan_id',
     ];
 
     /**
@@ -47,16 +42,30 @@ class User extends Authenticatable
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'password' => 'hashed',
     ];
 
     /**
-     * Always encrypt the password when it is updated.
-     *
-     * @param $value
-    * @return string
-    */
-    public function setPasswordAttribute($value)
+     * Relasi ke Role
+     */
+    public function role()
     {
-        $this->attributes['password'] = bcrypt($value);
+        return $this->belongsTo(Role::class);
+    }
+
+    /**
+     * Relasi ke Perusahaan
+     */
+    public function perusahaan()
+    {
+        return $this->belongsTo(Perusahaan::class);
+    }
+
+    /**
+     * Relasi ke Form Transaksi yang diajukan
+     */
+    public function transaksiForms()
+    {
+        return $this->hasMany(TransaksiForm::class, 'pemohon_id');
     }
 }

@@ -3,193 +3,183 @@
 namespace App\Http\Controllers;
 
 use App\Models\TransaksiForm;
-use App\Models\TransaksiHistory; // Pastikan ini di-import
+use App\Models\User;
+use App\Notifications\NotifikasiPermohonan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 
 class ApprovalController extends Controller
 {
     /**
-     * Mengajukan (submit) transaksi yang statusnya 'Draft'.
-     * Ini hanya bisa dilakukan oleh Pemohon.
+     * Menangani aksi (Approve / Reject) dari approver.
      */
-    public function submit(TransaksiForm $transaksiForm)
+    public function process(Request $request, TransaksiForm $transaksiForm)
     {
-        $user = Auth::user();
-
-        // 1. Otorisasi: Hanya pemohon yang bisa submit
-        if ($transaksiForm->pemohon_id != $user->id) {
-            return back()->with('error', 'Anda tidak memiliki izin untuk mengajukan transaksi ini.');
-        }
-
-        // 2. Validasi Status: Hanya 'Draft' yang bisa di-submit
-        if ($transaksiForm->status != 'Draft') {
-            return back()->with('error', 'Hanya transaksi berstatus Draft yang bisa diajukan.');
-        }
-
-        // 3. Validasi Balance (PENTING)
-        $totalRincian = $transaksiForm->details()->sum('nominal');
-        if ((float) $transaksiForm->total_nominal != (float) $totalRincian || $totalRincian == 0) {
-            return back()->with('error', 'Gagal mengajukan. Total rincian (Rp ' . number_format($totalRincian, 0, ',', '.') .
-                                     ') tidak sama dengan Total Form (Rp ' . number_format($transaksiForm->total_nominal, 0, ',', '.') . ') atau rincian masih kosong.');
-        }
-
-        // 4. Proses Database
-        DB::beginTransaction();
-        try {
-            $oldStatus = $transaksiForm->status;
-            $newStatus = 'Diajukan';
-
-            // Update status form
-            $transaksiForm->status = $newStatus;
-            $transaksiForm->save();
-
-            // Catat ke history
-            $transaksiForm->history()->create([
-                'user_id' => $user->id,
-                'action' => 'Pengajuan Diajukan',
-                'remarks' => 'Pengajuan telah disubmit oleh pemohon.',
-                'from_status' => $oldStatus,
-                'to_status' => $newStatus,
-            ]);
-
-            DB::commit();
-            return redirect()->route('list-permohonan')->with('success', 'Transaksi berhasil diajukan dan sedang menunggu persetujuan PYB1.');
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Gagal mengajukan transaksi: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Menyetujui (approve) transaksi.
-     * Ini bisa dilakukan oleh PYB1, PYB2, atau BO.
-     */
-    public function approve(TransaksiForm $transaksiForm)
-    {
-        $user = Auth::user();
-        $userRole = $user->role->role_name ?? null;
-
-        // Tentukan status lama dan baru berdasarkan role
-        $approvalMap = [
-            'PYB1' => ['oldStatus' => 'Diajukan', 'newStatus' => 'Disetujui PYB1', 'nextApprover' => 'PYB2'],
-            'PYB2' => ['oldStatus' => 'Disetujui PYB1', 'newStatus' => 'Disetujui PYB2', 'nextApprover' => 'BO'],
-            'BO' => ['oldStatus' => 'Disetujui PYB2', 'newStatus' => 'Disetujui BO', 'nextApprover' => 'Selesai'],
-        ];
-
-        // 1. Otorisasi: Cek apakah user punya role yang ada di map
-        if (!array_key_exists($userRole, $approvalMap)) {
-            return back()->with('error', 'Anda tidak memiliki izin untuk melakukan persetujuan.');
-        }
-
-        $map = $approvalMap[$userRole];
-        $oldStatus = $map['oldStatus'];
-        $newStatus = $map['newStatus'];
-
-        // 2. Validasi Status: Cek apakah status transaksi sesuai
-        if ($transaksiForm->status != $oldStatus) {
-            return back()->with('error', "Gagal. Transaksi ini tidak dalam status '$oldStatus'. Status saat ini: {$transaksiForm->status}");
-        }
-
-        // 3. Proses Database
-        DB::beginTransaction();
-        try {
-            // Update status form
-            $transaksiForm->status = $newStatus;
-            $transaksiForm->save();
-
-            // Catat ke history
-            $remarks = "Disetujui oleh $userRole.";
-            $transaksiForm->history()->create([
-                'user_id' => $user->id,
-                'action' => 'Disetujui',
-                'remarks' => $remarks,
-                'from_status' => $oldStatus,
-                'to_status' => $newStatus,
-            ]);
-
-            DB::commit();
-
-            $message = "Transaksi berhasil disetujui. Status: $newStatus.";
-            if ($map['nextApprover'] != 'Selesai') {
-                $message .= " Menunggu persetujuan {$map['nextApprover']}.";
-            } else {
-                $message .= " Transaksi selesai disetujui.";
-            }
-
-            return redirect()->route('list-permohonan')->with('success', $message);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Gagal menyetujui transaksi: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Menolak (reject) transaksi.
-     * Ini bisa dilakukan oleh PYB1, PYB2, atau BO.
-     */
-    public function reject(Request $request, TransaksiForm $transaksiForm)
-    {
-        $user = Auth::user();
-        $userRole = $user->role->role_name ?? null;
-
-        // Validasi input 'remarks' dari SweetAlert
-        $validated = $request->validate([
-            'remarks' => 'required|string|min:5|max:500',
+        $request->validate([
+            'action' => 'required|in:approve,reject',
+            'remarks' => 'nullable|string|max:1000',
         ]);
 
-        $validRoles = ['PYB1', 'PYB2', 'BO'];
+        $user = Auth::user();
+        $userRole = $user->role->role_name;
+        $action = $request->input('action');
+        $remarks = $request->input('remarks', '');
+
+        // Tentukan status saat ini, status baru, dan notifikasi
         $currentStatus = $transaksiForm->status;
-        $allowedStatuses = ['Diajukan', 'Disetujui PYB1', 'Disetujui PYB2'];
+        $nextStatus = '';
+        $actionMessage = '';
+        $notificationMessage = '';
+        $usersToNotify = null;
+        $pemohon = $transaksiForm->pemohon;
 
-        // 1. Otorisasi: Cek role
-        if (!in_array($userRole, $validRoles)) {
-            return back()->with('error', 'Anda tidak memiliki izin untuk menolak transaksi.');
+        // ==========================================================
+        // PERBAIKAN LOGIKA PESAN (ACTION MESSAGE) ADA DI SINI
+        // ==========================================================
+
+        if ($action === 'approve') {
+            $actionMessage = "Disetujui oleh $userRole"; // Pesan histori general
+            $remarks = $remarks ?: "Disetujui oleh $userRole.";
+
+            switch ($currentStatus) {
+                case 'Diajukan': // Tugasnya Direksi
+                    if ($userRole !== 'Direksi') return back()->with('error', 'Anda tidak memiliki wewenang untuk aksi ini.');
+                    $nextStatus = 'Disetujui Direksi';
+                    $usersToNotify = User::whereHas('role', function($q) { $q->whereIn('role_name', ['PYB1', 'Admin']); })->get();
+                    $notificationMessage = "Permohonan (ID: {$transaksiForm->id}) telah disetujui oleh Direksi dan menunggu persetujuan PYB1.";
+                    break;
+
+                case 'Disetujui Direksi': // Tugasnya PYB1
+                    if ($userRole !== 'PYB1') return back()->with('error', 'Anda tidak memiliki wewenang untuk aksi ini.');
+                    $nextStatus = 'Disetujui PYB1';
+                    $usersToNotify = User::whereHas('role', function($q) { $q->whereIn('role_name', ['PYB2', 'Admin']); })->get();
+                    $notificationMessage = "Permohonan (ID: {$transaksiForm->id}) telah disetujui oleh PYB1 dan menunggu persetujuan PYB2.";
+                    break;
+
+                case 'Disetujui PYB1': // Tugasnya PYB2
+                    if ($userRole !== 'PYB2') return back()->with('error', 'Anda tidak memiliki wewenang untuk aksi ini.');
+                    $nextStatus = 'Disetujui PYB2';
+                    $usersToNotify = User::whereHas('role', function($q) { $q->whereIn('role_name', ['BO', 'Admin']); })->get();
+                    $notificationMessage = "Permohonan (ID: {$transaksiForm->id}) telah disetujui oleh PYB2 dan menunggu persetujuan BO.";
+                    break;
+
+                case 'Disetujui PYB2': // Tugasnya BO
+                    if ($userRole !== 'BO') return back()->with('error', 'Anda tidak memiliki wewenang untuk aksi ini.');
+                    $nextStatus = 'Disetujui BO';
+                    $usersToNotify = User::where('id', $pemohon->id)->get(); // Notif ke Pemohon
+                    $notificationMessage = "Permohonan (ID: {$transaksiForm->id}) Anda telah disetujui sepenuhnya oleh BO.";
+                    break;
+
+                default:
+                    return back()->with('error', 'Status transaksi tidak valid untuk persetujuan.');
+            }
+
+        } else { // action === 'reject'
+
+            // ==========================================================
+            // INI ADALAH PERBAIKANNYA:
+            // Pesan aksi (actionMessage) sekarang langsung mengambil
+            // $userRole, bukan berdasarkan $currentStatus.
+            // ==========================================================
+            $actionMessage = "Ditolak oleh $userRole";
+            $remarks = $remarks ?: "Ditolak oleh $userRole.";
+            $nextStatus = 'Ditolak';
+
+            // Siapapun yang me-reject, notifikasi dikirim ke Pemohon
+            $usersToNotify = User::where('id', $pemohon->id)->get();
+            $notificationMessage = "Permohonan (ID: {$transaksiForm->id}) Anda ditolak oleh $userRole dengan alasan: " . $remarks;
         }
 
-        // 2. Validasi Status: Cek apakah transaksi sedang dalam proses approval
-        if (!in_array($currentStatus, $allowedStatuses)) {
-            return back()->with('error', "Gagal. Transaksi dengan status '$currentStatus' tidak dapat ditolak.");
-        }
 
-        // (Opsional) Otorisasi lebih ketat: PYB1 hanya bisa reject 'Diajukan', dst.
-        // if (($userRole == 'PYB1' && $currentStatus != 'Diajukan') ||
-        //     ($userRole == 'PYB2' && $currentStatus != 'Disetujui PYB1') ||
-        //     ($userRole == 'BO' && $currentStatus != 'Disetujui PYB2')) {
-        //     return back()->with('error', "Anda tidak dapat menolak transaksi pada tahap ini.");
-        // }
-
-
-        // 3. Proses Database
-        DB::beginTransaction();
+        // Simpan perubahan
         try {
-            $oldStatus = $transaksiForm->status;
-            $newStatus = 'Ditolak';
-
-            // Update status form
-            $transaksiForm->status = $newStatus;
+            // 1. Update status form
+            $transaksiForm->status = $nextStatus;
             $transaksiForm->save();
 
-            // Catat ke history
-            $remarks = "Ditolak oleh $userRole. Alasan: " . $validated['remarks'];
+            // 2. Catat histori
             $transaksiForm->history()->create([
                 'user_id' => $user->id,
-                'action' => 'Ditolak',
+                'action' => $actionMessage, // <-- Pesan yang sudah diperbaiki
                 'remarks' => $remarks,
-                'from_status' => $oldStatus,
-                'to_status' => $newStatus,
+                'from_status' => $currentStatus,
+                'to_status' => $nextStatus,
             ]);
 
-            DB::commit();
-            return redirect()->route('list-permohonan')->with('success', 'Transaksi telah ditolak.');
+            // 3. Kirim notifikasi
+            if ($usersToNotify && $usersToNotify->isNotEmpty()) {
+                $url = route('permohonan.detail', $transaksiForm);
+                Notification::send($usersToNotify, new NotifikasiPermohonan($notificationMessage, $url));
+            }
+
+            return redirect()->route('list-permohonan')->with('success', 'Aksi berhasil dicatat.');
 
         } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Gagal menolak transaksi: ' . $e->getMessage());
+            Log::error("Gagal proses approval: " . $e->getMessage());
+            return back()->with('error', 'Terjadi kesalahan server: ' . $e->getMessage());
+        }
+    }
+
+
+    /**
+     * Menangani aksi "Submit" dari Pemohon (dari Draft).
+     */
+    public function submit(Request $request, TransaksiForm $transaksiForm)
+    {
+        $user = Auth::user();
+
+        // 1. Validasi: Hanya Pemohon dan status Draft
+        if ($user->id !== $transaksiForm->pemohon_id || $transaksiForm->status !== 'Draft') {
+             return back()->with('error', 'Anda tidak memiliki wewenang untuk aksi ini.');
+        }
+
+        // 2. Validasi: Cek ulang semua field wajib
+        $validator = \Validator::make($transaksiForm->toArray(), [
+            'kategori_uraian' => 'required',
+            'kategori_pengakuan' => 'required',
+            'total_nominal' => 'required|numeric|min:1',
+            'tipe_dasar_transaksi' => 'required',
+            'lawan_transaksi' => 'required',
+            'rekening_transaksi' => 'required',
+        ]);
+
+        if ($validator->fails()) {
+            return back()->with('error', 'Data form belum lengkap. Silakan edit (Update) form sebelum mengajukan.');
+        }
+
+        // 3. Update status
+        try {
+            $transaksiForm->status = 'Diajukan';
+            $transaksiForm->save();
+
+            // 4. Catat histori
+            $transaksiForm->history()->create([
+                'user_id' => $user->id,
+                'action' => 'Mengajukan',
+                'remarks' => 'Permohonan diajukan dari Draft.',
+                'from_status' => 'Draft',
+                'to_status' => 'Diajukan',
+            ]);
+
+            // 5. Kirim Notifikasi ke Direksi (Alur Baru)
+            try {
+                $usersToNotify = User::whereHas('role', function($q) { $q->where('role_name', 'Direksi'); })->get();
+                if ($usersToNotify->isNotEmpty()) {
+                    $message = "Permohonan baru (ID: {$transaksiForm->id}) telah diajukan oleh {$user->name} dan menunggu persetujuan Anda.";
+                    $url = route('permohonan.detail', $transaksiForm);
+                    Notification::send($usersToNotify, new NotifikasiPermohonan($message, $url));
+                }
+            } catch (\Exception $e) {
+                Log::error('Gagal kirim notifikasi submit: ' . $e->getMessage());
+            }
+
+            return redirect()->route('list-permohonan')->with('success', 'Permohonan berhasil diajukan.');
+
+        } catch (\Exception $e) {
+            Log::error("Gagal submit draft: " . $e->getMessage());
+            return back()->with('error', 'Terjadi kesalahan server: ' . $e->getMessage());
         }
     }
 }

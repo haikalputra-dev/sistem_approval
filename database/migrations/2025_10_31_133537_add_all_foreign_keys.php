@@ -23,11 +23,6 @@ return new class extends Migration
             $table->foreign('perusahaan_id')->references('id')->on('perusahaans')->onDelete('restrict');
         });
 
-        // Foreign keys untuk tabel 'transaksi_details'
-        Schema::table('transaksi_details', function (Blueprint $table) {
-            $table->foreign('transaksi_form_id')->references('id')->on('transaksi_forms')->onDelete('cascade');
-        });
-
         // Foreign keys untuk tabel 'transaksi_attachments'
         Schema::table('transaksi_attachments', function (Blueprint $table) {
             $table->foreign('transaksi_form_id')->references('id')->on('transaksi_forms')->onDelete('cascade');
@@ -54,10 +49,6 @@ return new class extends Migration
         Schema::table('transaksi_forms', function (Blueprint $table) {
             $table->dropForeign(['pemohon_id']);
             $table->dropForeign(['perusahaan_id']);
-        });
-
-        Schema::table('transaksi_details', function (Blueprint $table) {
-            $table->dropForeign(['transaksi_form_id']);
         });
 
         Schema::table('transaksi_attachments', function (Blueprint $table) {

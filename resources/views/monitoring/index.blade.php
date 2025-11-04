@@ -117,13 +117,42 @@
                                             $progress = 0;
                                             $statusClass = 'bg-gradient-secondary'; // Default
 
-                                            switch ($transaksi->status) {
-                                                case 'Draft': $progress = 10; $statusClass = 'bg-gradient-secondary'; break;
-                                                case 'Diajukan': $progress = 25; $statusClass = 'bg-gradient-warning'; break;
-                                                case 'Disetujui PYB1': $progress = 50; $statusClass = 'bg-gradient-info'; break;
-                                                case 'Disetujui PYB2': $progress = 75; $statusClass = 'bg-gradient-primary'; break;
-                                                case 'Disetujui BO': $progress = 100; $statusClass = 'bg-gradient-success'; break;
-                                                case 'Ditolak': $progress = 100; $statusClass = 'bg-gradient-danger'; break;
+                                           switch ($transaksi->status) {
+                                                case 'Draft':
+                                                    $progress = 10;
+                                                    $statusClass = 'bg-gradient-secondary';
+                                                    $progressClass = 'bg-gradient-secondary';
+                                                    break;
+                                                case 'Diajukan': // Menunggu Direksi
+                                                    $progress = 25;
+                                                    $statusClass = 'bg-gradient-warning';
+                                                    $progressClass = 'bg-gradient-warning';
+                                                    break;
+                                                case 'Disetujui Direksi': // Menunggu PYB1
+                                                    $progress = 50;
+                                                    $statusClass = 'bg-gradient-info';
+                                                    $progressClass = 'bg-gradient-info';
+                                                    break;
+                                                case 'Disetujui PYB1': // Menunggu PYB2
+                                                    $progress = 75;
+                                                    $statusClass = 'bg-gradient-primary';
+                                                    $progressClass = 'bg-gradient-primary';
+                                                    break;
+                                                case 'Disetujui PYB2': // Menunggu BO
+                                                    $progress = 90;
+                                                    $statusClass = 'bg-gradient-primary';
+                                                    $progressClass = 'bg-gradient-primary';
+                                                    break;
+                                                case 'Disetujui BO': // Selesai
+                                                    $progress = 100;
+                                                    $statusClass = 'bg-gradient-success';
+                                                    $progressClass = 'bg-gradient-success';
+                                                    break;
+                                                case 'Ditolak':
+                                                    $progress = 100; // Tetap 100% tapi beda warna
+                                                    $statusClass = 'bg-gradient-danger';
+                                                    $progressClass = 'bg-gradient-danger';
+                                                    break;
                                             }
                                         @endphp
 

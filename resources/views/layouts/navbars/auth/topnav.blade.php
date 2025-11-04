@@ -31,7 +31,8 @@
                             <a class="dropdown-item border-radius-md" href="javascript:;">
                                 <div class="d-flex py-1">
                                     <div class="my-auto">
-                                        <img src="{{ asset('./img/team-2.jpg') }}" class="avatar avatar-sm  me-3 ">
+                                        {{-- PERBAIKAN: Menghapus './' dari path asset --}}
+                                        <img src="{{ asset('img/team-2.jpg') }}" class="avatar avatar-sm  me-3 ">
                                     </div>
                                     <div class="d-flex flex-column justify-content-center">
                                         <h6 class="text-sm font-weight-normal mb-1">
@@ -49,7 +50,8 @@
                             <a class="dropdown-item border-radius-md" href="javascript:;">
                                 <div class="d-flex py-1">
                                     <div class="my-auto">
-                                        <img src="./img/small-logos/logo-spotify.svg"
+                                        {{-- PERBAIKAN: Mengganti path relatif dengan asset() --}}
+                                        <img src="{{ asset('img/small-logos/logo-spotify.svg') }}"
                                             class="avatar avatar-sm bg-gradient-dark  me-3 ">
                                     </div>
                                     <div class="d-flex flex-column justify-content-center">
@@ -82,7 +84,7 @@
                                                                 opacity="0.593633743"></path>
                                                             <path class="color-background"
                                                                 d="M0,16.125 L0,32.25 C0,34.2297917 1.60354167,35.8333333 3.58333333,35.8333333 L39.4166667,35.8333333 C41.3964583,35.8333333 43,34.2297917 43,32.25 L43,16.125 L0,16.125 Z M19.7083333,26.875 L7.16666667,26.875 L7.16666667,23.2916667 L19.7083333,23.2916667 L19.7083333,26.875 Z M35.8333333,26.875 L28.6666667,26.875 L28.6666667,23.2916667 L35.8333333,23.2916667 L35.8333333,26.875 Z">
-                                                            </path>
+                                                            </Lp>
                                                         </g>
                                                     </g>
                                                 </g>
@@ -108,3 +110,4 @@
     </div>
 </nav>
 <!-- End Navbar -->
+

@@ -15,15 +15,28 @@ return new class extends Migration
             $table->id();
             $table->unsignedBigInteger('pemohon_id');
             $table->unsignedBigInteger('perusahaan_id');
-            $table->date('tanggal_pengajuan');
+            $table->dateTime('tanggal_pengajuan');
+
+            // Kolom Baru (Revisi)
+            $table->string('kategori_uraian')->nullable();
+
             $table->text('uraian_transaksi');
+
+            // Kolom Baru (Revisi)
+            $table->string('kategori_pengakuan')->nullable();
+
             $table->decimal('total_nominal', 15, 2);
-            $table->string('dasar_transaksi')->nullable();
+
+            // Kolom 'dasar_transaksi' (lama) DIHAPUS dan DIGANTI dengan 2 kolom ini:
+            $table->string('tipe_dasar_transaksi')->nullable(); // Cth: 'nota', 'invoice', 'pernyataan_direksi'
+            $table->text('keterangan_dasar_transaksi')->nullable(); // Untuk isi keterangan pernyataan direksi
+
             $table->string('lawan_transaksi')->nullable();
             $table->string('rekening_transaksi')->nullable();
-            $table->date('rencana_tanggal_transaksi');
+            $table->date('rencana_tanggal_transaksi')->nullable();
             $table->text('keterangan_form')->nullable();
-            $table->string('status', 50)->default('Draft'); // Misal: Draft, Submitted, Approved_PYB1, Approved_PYB2, Approved_Direksi, Rejected
+            $table->string('status', 50)->default('Draft'); // Cth: Draft, Diajukan, Disetujui Direksi, ...
+
             $table->timestamps();
         });
     }
@@ -36,3 +49,4 @@ return new class extends Migration
         Schema::dropIfExists('transaksi_forms');
     }
 };
+

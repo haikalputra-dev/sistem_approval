@@ -41,7 +41,7 @@
             </li>
             <li class="nav-item">
                 <a class="nav-link {{ (request()->routeIs('list-permohonan') || request()->routeIs('form-permohonan') || request()->routeIs('permohonan.detail')) ? 'active' : '' }}"
-                    href="{{ route('list-permohonan') }}">
+                    href="{{ route('permohonan.list') }}">
                     <div
                         class="icon icon-shape icon-sm border-radius-md text-center me-2 d-flex align-items-center justify-content-center">
                         <i class="ni ni-badge text-warning text-sm opacity-10"></i>
@@ -52,7 +52,7 @@
 
             {{-- TAMBAHAN: Link Monitoring Baru --}}
             {{-- Ini hanya muncul jika BUKAN Pemohon --}}
-            @if(Auth::check() && Auth::user()->role && Auth::user()->role->role_name != 'Pemohon')
+            {{-- @if(Auth::check() && Auth::user()->role && Auth::user()->role->role_name != 'Pemohon') --}}
             <li class="nav-item">
                 <a class="nav-link {{ (request()->routeIs('monitoring.index')) ? 'active' : '' }}" href="{{ route('monitoring.index') }}">
                     <div
@@ -62,7 +62,7 @@
                     <span class="nav-link-text ms-1">Monitoring (History)</span>
                 </a>
             </li>
-            @endif
+            {{-- @endif --}}
 
 
 </aside>

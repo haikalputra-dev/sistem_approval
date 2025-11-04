@@ -17,6 +17,7 @@ class UserSeeder extends Seeder
         // Ambil ID dari roles dan perusahaan
         $roleAdminId = DB::table('roles')->where('role_name', 'Admin')->value('id');
         $rolePemohonId = DB::table('roles')->where('role_name', 'Pemohon')->value('id');
+        $roleDireksiId = DB::table('roles')->where('role_name', 'Direksi')->value('id');
         $rolePYB1Id = DB::table('roles')->where('role_name', 'PYB1')->value('id');
         $rolePYB2Id = DB::table('roles')->where('role_name', 'PYB2')->value('id');
         $roleBOId = DB::table('roles')->where('role_name', 'BO')->value('id');
@@ -27,7 +28,6 @@ class UserSeeder extends Seeder
         $now = Carbon::now();
 
         DB::table('users')->insert([
-            // 1. Admin
             [
                 'name' => 'Admin Sistem',
                 'email' => 'admin@sistemapproval.com',
@@ -38,7 +38,6 @@ class UserSeeder extends Seeder
                 'created_at' => $now,
                 'updated_at' => $now,
             ],
-            // 2. Pemohon
             [
                 'name' => 'User Pemohon 1',
                 'email' => 'pemohon1@sistemapproval.com',
@@ -49,7 +48,26 @@ class UserSeeder extends Seeder
                 'created_at' => $now,
                 'updated_at' => $now,
             ],
-            // 3. PYB1
+            [
+                'name' => 'User Pemohon 2',
+                'email' => 'pemohon2@sistemapproval.com',
+                'password' => Hash::make('password'),
+                'role_id' => $rolePemohonId,
+                'perusahaan_id' => $perusahaan2Id,
+                'email_verified_at' => $now,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+            [
+                'name' => 'Direksi',
+                'email' => 'direksi@sistemapproval.com',
+                'password' => Hash::make('password'),
+                'role_id' => $roleDireksiId,
+                'perusahaan_id' => null ,
+                'email_verified_at' => $now,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
             [
                 'name' => 'Pihak Yang Berwenang 1',
                 'email' => 'pyb1@sistemapproval.com',
@@ -60,7 +78,6 @@ class UserSeeder extends Seeder
                 'created_at' => $now,
                 'updated_at' => $now,
             ],
-            // 4. PYB2
             [
                 'name' => 'Pihak Yang Berwenang 2',
                 'email' => 'pyb2@sistemapproval.com',
@@ -71,7 +88,6 @@ class UserSeeder extends Seeder
                 'created_at' => $now,
                 'updated_at' => $now,
             ],
-            // 5. BO
             [
                 'name' => 'Benneficial Owner',
                 'email' => 'bo@sistemapproval.com',

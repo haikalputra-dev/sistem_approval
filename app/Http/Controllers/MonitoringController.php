@@ -2,89 +2,118 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\TransaksiForm;
-use App\Models\User; // <-- Untuk filter pemohon
 use Illuminate\Http\Request;
+use App\Models\TransaksiForm;
+use App\Models\User;
 use Illuminate\Support\Facades\Auth;
-use Carbon\Carbon; // <-- Untuk filter tanggal
 
 class MonitoringController extends Controller
 {
     /**
-     * Menampilkan halaman monitoring dengan filter.
+     * Handle the incoming request.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
      */
     public function index(Request $request)
     {
-        // === PERBAIKAN: Definisikan $user di sini ===
-        $user = Auth::user();
-
-        // Otorisasi: Hanya role selain Pemohon yang boleh akses
-        $userRole = $user->role->role_name ?? null;
-        if ($userRole == 'Pemohon') {
-            abort(403, 'Anda tidak memiliki izin untuk mengakses halaman ini.');
-        }
-
-        // Mulai query
         $query = TransaksiForm::query()->with(['pemohon', 'perusahaan']);
 
-        // === Terapkan Filter ===
+        $user = Auth::user();
+        $userRole = $user->role->role_name ?? null;
 
-        // 1. Filter berdasarkan Status
-        if ($request->filled('status')) {
+        // Daftar status untuk filter dropdown
+        $statusList = [
+            'Draft',
+            'Diajukan',
+            'Disetujui Direksi',
+            'Disetujui PYB1',
+            'Disetujui PYB2',
+            'Disetujui BO',
+            'Ditolak'
+        ];
+
+        // Filter riwayat berdasarkan role
+        switch ($userRole) {
+            case 'Pemohon':
+                // Pemohon hanya melihat miliknya
+                $query->where('pemohon_id', $user->id);
+                break;
+            case 'Admin':
+                // Admin melihat semua (tanpa filter)
+                break;
+
+            case 'Direksi':
+                $query->where(function($q) use ($user) {
+                    $q->where('status', 'Diajukan') // Tugasnya
+                      ->orWhereHas('history', function($hist) use ($user) { // Riwayatnya
+                          $hist->where('user_id', $user->id);
+                      });
+                });
+                break;
+            case 'PYB1':
+                 $query->where(function($q) use ($user) {
+                    $q->where('status', 'Disetujui Direksi') // Tugasnya
+                      ->orWhereHas('history', function($hist) use ($user) { // Riwayatnya
+                          $hist->where('user_id', $user->id);
+                      });
+                });
+                break;
+            case 'PYB2':
+                 $query->where(function($q) use ($user) {
+                    $q->where('status', 'Disetujui PYB1') // Tugasnya
+                      ->orWhereHas('history', function($hist) use ($user) { // Riwayatnya
+                          $hist->where('user_id', $user->id);
+                      });
+                });
+                break;
+            case 'BO':
+                 $query->where(function($q) use ($user) {
+                    $q->where('status', 'Disetujui PYB2') // Tugasnya
+                      ->orWhereHas('history', function($hist) use ($user) { // Riwayatnya
+                          $hist->where('user_id', $user->id);
+                      });
+                });
+                break;
+
+            default:
+                // Role tidak dikenal, jangan tampilkan apa-apa
+                $query->whereRaw('1 = 0');
+                break;
+        }
+
+
+        // == FILTER FORM ==
+        // 1. Filter by Status
+        if ($request->filled('status') && $request->status != 'all') {
             $query->where('status', $request->status);
         }
 
-        // 2. Filter berdasarkan Rentang Tanggal
-        if ($request->filled('tanggal_dari')) {
-            $query->whereDate('tanggal_pengajuan', '>=', Carbon::parse($request->tanggal_dari));
-        }
-        if ($request->filled('tanggal_sampai')) {
-            $query->whereDate('tanggal_pengajuan', '<=', Carbon::parse($request->tanggal_sampai));
+        // 2. Filter by Tanggal
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $query->whereBetween('tanggal_pengajuan', [$request->start_date, $request->end_date]);
         }
 
-        // 3. Filter berdasarkan Pemohon
-        if ($request->filled('pemohon_id')) {
+        // 3. Filter by Pemohon (Hanya untuk Admin/Approver)
+        if ($userRole != 'Pemohon' && $request->filled('pemohon_id') && $request->pemohon_id != 'all') {
             $query->where('pemohon_id', $request->pemohon_id);
         }
 
-        // 4. (Opsional) Batasi view berdasarkan role jika bukan Admin
-        if ($userRole != 'Admin') {
-            // Approver (PYB1, PYB2, BO) hanya melihat transaksi yang pernah mereka tangani
-            // atau yang sedang menjadi tugas mereka
-            $query->where(function($q) use ($userRole, $user) { // <-- Sekarang $user sudah defined
-                // Tugas mereka saat ini
-                if ($userRole == 'PYB1') $q->where('status', 'Diajukan');
-                if ($userRole == 'PYB2') $q->where('status', 'Disetujui PYB1');
-                if ($userRole == 'BO') $q->where('status', 'Disetujui PYB2');
+        // Ambil data
+        $transaksiForms = $query->latest()->paginate(20)->withQueryString();
 
-                // Atau yang pernah mereka proses (ada di histori)
-                $q->orWhereHas('history', function($hist) use ($user) {
-                    $hist->where('user_id', $user->id);
-                });
-            });
+        // Ambil data pemohon untuk dropdown filter (hanya jika perlu)
+        $pemohonList = [];
+        if ($userRole != 'Pemohon') {
+            $pemohonList = User::whereHas('role', function($q) {
+                $q->where('role_name', 'Pemohon');
+            })->orderBy('name')->get();
         }
-        // Jika Admin, dia akan melihat semua (tidak ada filter role tambahan)
 
-
-        // Ambil hasil query
-        $transaksiForms = $query->latest('tanggal_pengajuan')->paginate(20)->withQueryString();
-
-        // Ambil data untuk filter dropdown
-        $pemohonList = User::whereHas('role', function($q) {
-            $q->where('role_name', 'Pemohon');
-        })->orderBy('name')->get();
-
-        $statusList = [
-            'Draft', 'Diajukan', 'Disetujui PYB1', 'Disetujui PYB2', 'Disetujui BO', 'Ditolak'
-        ];
-
-        // Kembalikan view dengan data
-        return view('monitoring.index', [
-            'transaksiForms' => $transaksiForms,
-            'pemohonList' => $pemohonList,
-            'statusList' => $statusList,
-            'filters' => $request->only(['status', 'tanggal_dari', 'tanggal_sampai', 'pemohon_id']), // Untuk mengisi ulang form
-        ]);
+        // ==========================================================
+        // PERBAIKAN: Kirim $statusList ke view
+        // ==========================================================
+        return view('monitoring.index', compact('transaksiForms', 'pemohonList', 'statusList'));
     }
 }
 
